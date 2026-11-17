@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Story Wars — Host</title>
+
+  <link rel="stylesheet" href="/style.css">
+
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+
+<body data-role="host">
+  <header>
+    <strong>📖 STORY WARS</strong>
+
+    <span id="connection" role="status">
+      Connecting…
+    </span>
+  </header>
+
+  <main>
+    <p class="eyebrow">
+      100% TRUE EDITION · HOST SCREEN
+    </p>
+
+    <p id="notice" role="status"></p>
+    <p id="error" role="alert"></p>
+
+    <div id="screen"></div>
+  </main>
+
+  <footer>
+    True stories. Surprising friends.
+
+    <button id="rules" class="quiet">
+      How to play
+    </button>
+  </footer>
+
+  <dialog id="rules-dialog">
+    <h2>How to play</h2>
+
+    <p>
+      3–8 players each write 3–5 completely true stories
+      about the theme.
+    </p>
+
+    <p>
+      Up to 10 stories are chosen at random. Guess who
+      wrote each one. Authors sit out their own story.
+    </p>
+
+    <p>
+      A correct guess earns 2 points. Authors earn 1 point
+      per incorrect vote. No vote earns no points for
+      either player.
+    </p>
+
+    <p>
+      Stories 6–10 double all points. After each reveal,
+      let the author tell the full story before the host
+      continues.
+    </p>
+
+    <button id="close-rules">Got it</button>
+  </dialog>
+</body>
+</html>

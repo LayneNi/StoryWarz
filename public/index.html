@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+
+  <title>Story Wars — Play</title>
+
+  <link rel="stylesheet" href="/style.css">
+
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+
+<body data-role="player">
+  <header>
+    <strong>📖 STORY WARS</strong>
+
+    <span id="connection" role="status">
+      Connecting…
+    </span>
+  </header>
+
+  <main>
+    <p class="eyebrow">
+      100% TRUE EDITION · PHONE CONTROLLER
+    </p>
+
+    <p id="notice" role="status"></p>
+    <p id="error" role="alert"></p>
+
+    <div id="screen"></div>
+  </main>
+
+  <footer>
+    Keep this page open while you play.
+  </footer>
+</body>
+</html>

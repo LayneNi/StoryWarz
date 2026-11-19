@@ -7,7 +7,8 @@
     content="width=device-width, initial-scale=1"
   >
 
-  <title>Story Wars — Host</title>
+  <meta name="theme-color" content="#10090c">
+  <title>Story Warz — Host</title>
 
   <link rel="stylesheet" href="/style.css">
 
@@ -17,22 +18,52 @@
 
 <body data-role="host">
   <header>
-    <strong>📖 STORY WARS</strong>
+    <strong class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 76" aria-hidden="true">
+        <path d="M19 18c-7-3-10-9-8-15 4 5 8 7 13 8"/>
+        <path d="M45 18c7-3 10-9 8-15-4 5-8 7-13 8"/>
+        <path d="M13 33c0-13 8-22 19-22s19 9 19 22c0 10-7 14-13 20-3 3-4 5-4 9H29c0-8 3-12 8-17 5-5 8-8 8-13 0-7-5-12-13-12s-13 5-13 13H13zM28 68h9v7h-9z"/>
+      </svg>
+      <span>STORY <b>WARZ</b></span>
+    </strong>
 
-    <span id="connection" role="status">
-      Connecting…
-    </span>
+    <div class="header-actions">
+      <span id="connection" role="status">
+        Connecting…
+      </span>
+      <button id="end-game" class="quiet header-end-game" type="button" hidden>
+        End game
+      </button>
+    </div>
   </header>
 
   <main>
     <p class="eyebrow">
-      100% TRUE EDITION · HOST SCREEN
+      THE STORYTELLING SHOWDOWN · HOST SCREEN
     </p>
 
     <p id="notice" role="status"></p>
     <p id="error" role="alert"></p>
 
     <div id="screen"></div>
+    <div id="countdown-overlay" class="reveal-countdown" hidden>
+      <div class="reveal-countdown-card" role="status" aria-live="assertive" aria-atomic="true">
+        <p class="countdown-label">REVEAL</p>
+        <div class="countdown-display">
+          <svg class="countdown-mark" viewBox="0 0 64 76" aria-hidden="true">
+            <path d="M19 18c-7-3-10-9-8-15 4 5 8 7 13 8"/>
+            <path d="M45 18c7-3 10-9 8-15-4 5-8 7-13 8"/>
+            <path d="M13 33c0-13 8-22 19-22s19 9 19 22c0 10-7 14-13 20-3 3-4 5-4 9H29c0-8 3-12 8-17 5-5 8-8 8-13 0-7-5-12-13-12s-13 5-13 13H13zM28 68h9v7h-9z"/>
+          </svg>
+          <strong id="countdown-number">5</strong>
+          <svg class="countdown-mark" viewBox="0 0 64 76" aria-hidden="true">
+            <path d="M19 18c-7-3-10-9-8-15 4 5 8 7 13 8"/>
+            <path d="M45 18c7-3 10-9 8-15-4 5-8 7-13 8"/>
+            <path d="M13 33c0-13 8-22 19-22s19 9 19 22c0 10-7 14-13 20-3 3-4 5-4 9H29c0-8 3-12 8-17 5-5 8-8 8-13 0-7-5-12-13-12s-13 5-13 13H13zM28 68h9v7h-9z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer>
@@ -53,13 +84,14 @@
 
     <p>
       Up to 10 stories are chosen at random. Guess who
-      wrote each one. Authors sit out their own story.
+      wrote each one. Every player votes, including the author,
+      who casts a bluff vote. Nobody can vote for themselves.
     </p>
 
     <p>
-      A correct guess earns 2 points. Authors earn 1 point
-      per incorrect vote. No vote earns no points for
-      either player.
+      A correct guess earns 2 points. The author earns 1 point
+      for each other player fooled by the story. Bluff votes
+      keep the round moving but do not affect the score.
     </p>
 
     <p>

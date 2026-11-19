@@ -13,6 +13,17 @@ const io = new Server(server, {
 });
 
 const rooms = new Map();
+const AVATAR_COLORS = [
+  '#ff8792',
+  '#ffc65f',
+  '#7be4ad',
+  '#73c9ff',
+  '#d5a0ff',
+  '#ffa66e',
+  '#f2a4ca',
+  '#a9d975'
+];
+const port = Number(process.env.PORT) || 3000;
 
 const THEMES = [
   ['Summer', 'Beach trips, heatwaves, summer jobs, or outdoor adventures.'],
@@ -109,6 +120,24 @@ function player(socket) {
   return [room, person];
 }
 
+function phoneOrigin() {
+  const interfaces = Object.entries(networkInterfaces()).flatMap(
+    ([name, addresses]) => (addresses || []).map(address => ({
+      name,
+      ...address
+    }))
+  );
+  const ipv4 = interfaces.filter(
+    address => address.family === 'IPv4' && !address.internal
+  );
+  const address =
+    ipv4.find(item => /wi-?fi|wireless|ethernet/i.test(item.name)) || ipv4[0];
+
+  return address
+    ? `http://${address.address}:${port}`
+    : `http://localhost:${port}`;
+}
+
 // Build a separate view for each device.
 // Unrevealed authors and other players' votes stay on the server.
 function view(room, person) {
@@ -120,14 +149,14 @@ function view(room, person) {
     phase: room.phase,
     gameId: room.gameId,
     hostConnected: Boolean(room.hostSocket),
-    serverNow: Date.now(),
+    phoneOrigin: phoneOrigin(),
     themes: THEMES,
     theme: room.theme,
-    deadline: room.deadline,
 
     players: room.players.map(p => ({
       id: p.id,
       name: p.name,
+      avatarColor: p.avatarColor,
       score: p.score,
       connected: Boolean(p.socket),
       ready: p.stories.length > 0,
@@ -139,9 +168,6 @@ function view(room, person) {
           id: person.id,
           ready: person.stories.length > 0,
           voted: Object.hasOwn(room.votes, person.id),
-          isAuthor:
-            room.phase === 'guessing' &&
-            story?.authorId === person.id
         }
       : null,
 
@@ -153,7 +179,8 @@ function view(room, person) {
           text: story.text,
           multiplier: multiplier(room),
           voteCount: Object.keys(room.votes).length,
-          requiredVotes: room.players.length - 1,
+          requiredVotes: room.players.length,
+          revealCountdown: room.revealCountdown,
 
           ...(revealing
             ? {
@@ -181,8 +208,9 @@ function broadcast(room) {
 function reveal(room) {
   if (room.phase !== 'guessing') return;
 
-  clearTimeout(room.timer);
-  room.deadline = null;
+  if (room.revealTimer) clearInterval(room.revealTimer);
+  room.revealTimer = null;
+  room.revealCountdown = null;
 
   const story = current(room);
   const author = room.players.find(p => p.id === story.authorId);
@@ -192,9 +220,19 @@ function reveal(room) {
   let fooled = 0;
 
   for (const p of room.players) {
-    if (p.id === author.id) continue;
-
     const guess = room.votes[p.id];
+
+    if (p.id === author.id) {
+      room.results.push({
+        playerId: p.id,
+        author: true,
+        guess: guess || null,
+        fooled: 0,
+        points: 0
+      });
+      continue;
+    }
+
     const correct = guess === author.id;
     const points = correct ? 2 * multiplier(room) : 0;
 
@@ -215,12 +253,9 @@ function reveal(room) {
 
   author.score += points;
 
-  room.results.push({
-    playerId: author.id,
-    author: true,
-    fooled,
-    points
-  });
+  const authorResult = room.results.find(result => result.author);
+  authorResult.fooled = fooled;
+  authorResult.points = points;
 
   room.phase = 'reveal';
 
@@ -230,19 +265,60 @@ function reveal(room) {
 function nextStory(room) {
   room.index++;
   room.votes = {};
+  room.revealCountdown = null;
 
   if (room.index >= room.deck.length) {
     room.phase = 'finished';
-    room.deadline = null;
   } else {
     room.phase = 'guessing';
     room.roundId = randomUUID();
-    room.deadline = Date.now() + 45000;
-
-    room.timer = setTimeout(() => reveal(room), 45000);
   }
 
   broadcast(room);
+}
+
+function startRevealCountdown(room) {
+  room.revealCountdown = 5;
+  broadcast(room);
+
+  room.revealTimer = setInterval(() => {
+    if (room.phase !== 'guessing') {
+      clearInterval(room.revealTimer);
+      room.revealTimer = null;
+      return;
+    }
+
+    room.revealCountdown--;
+
+    if (room.revealCountdown <= 0) {
+      clearInterval(room.revealTimer);
+      room.revealTimer = null;
+      reveal(room);
+    } else {
+      broadcast(room);
+    }
+  }, 1000);
+}
+
+function resetToLobby(room) {
+  if (room.revealTimer) clearInterval(room.revealTimer);
+
+  room.revealTimer = null;
+  room.revealCountdown = null;
+  room.phase = 'lobby';
+  room.gameId = randomUUID();
+  room.theme = THEMES[0];
+  room.deck = [];
+  room.index = -1;
+  room.roundId = null;
+  room.votes = {};
+  room.results = [];
+  room.touched = Date.now();
+
+  room.players.forEach(p => {
+    p.score = 0;
+    p.stories = [];
+  });
 }
 
 function bind(socket, room, person) {
@@ -318,7 +394,8 @@ io.on('connection', socket => {
       deck: [],
       index: -1,
       votes: {},
-      deadline: null,
+      revealCountdown: null,
+      revealTimer: null,
       touched: Date.now(),
       gameId: randomUUID()
     };
@@ -399,11 +476,18 @@ io.on('connection', socket => {
       fail('That name is already taken.');
     }
 
+    const availableAvatarColors = AVATAR_COLORS.filter(
+      color => !room.players.some(player => player.avatarColor === color)
+    );
+
     const p = {
       id: randomUUID(),
       token: token(),
       name,
       score: 0,
+      avatarColor: availableAvatarColors[
+        randomInt(availableAvatarColors.length)
+      ],
       stories: [],
       socket: null
     };
@@ -542,15 +626,6 @@ io.on('connection', socket => {
       fail('That story has ended.');
     }
 
-    if (Date.now() >= room.deadline) {
-      reveal(room);
-      fail('Time is up.');
-    }
-
-    if (current(room).authorId === p.id) {
-      fail('Authors sit out their own story.');
-    }
-
     if (Object.hasOwn(room.votes, p.id)) {
       fail('Your vote is already locked.');
     }
@@ -563,12 +638,16 @@ io.on('connection', socket => {
       fail('Invalid player.');
     }
 
+    if (data.authorId === p.id) {
+      fail('You cannot vote for yourself.');
+    }
+
     room.votes[p.id] = data.authorId;
 
     if (
-      Object.keys(room.votes).length === room.players.length - 1
+      Object.keys(room.votes).length === room.players.length
     ) {
-      reveal(room);
+      startRevealCountdown(room);
     } else {
       broadcast(room);
     }
@@ -591,6 +670,32 @@ io.on('connection', socket => {
     return {};
   });
 
+  on('end', () => {
+    const room = host(socket);
+
+    if (room.revealTimer) clearInterval(room.revealTimer);
+
+    const code = room.code;
+    const socketIds = [room.hostSocket, ...room.players.map(p => p.socket)]
+      .filter(Boolean);
+
+    for (const id of socketIds) {
+      const participant = io.sockets.sockets.get(id);
+
+      if (participant) {
+        participant.data = {};
+        io.to(id).emit(
+          'closed',
+          'The host ended the game. Create or join a room to play again.'
+        );
+      }
+    }
+
+    rooms.delete(code);
+
+    return {};
+  });
+
   on('replay', () => {
     const room = host(socket);
 
@@ -598,16 +703,7 @@ io.on('connection', socket => {
       fail('Finish this game first.');
     }
 
-    room.phase = 'lobby';
-    room.gameId = randomUUID();
-    room.deck = [];
-    room.index = -1;
-    room.votes = {};
-
-    room.players.forEach(p => {
-      p.score = 0;
-      p.stories = [];
-    });
+    resetToLobby(room);
 
     broadcast(room);
 
@@ -646,7 +742,7 @@ setInterval(() => {
       Date.now() - room.touched > 43200000;
 
     if (hostExpired || roomExpired) {
-      clearTimeout(room.timer);
+      if (room.revealTimer) clearInterval(room.revealTimer);
 
       const ids = [
         room.hostSocket,
@@ -670,8 +766,6 @@ setInterval(() => {
     }
   }
 }, 30000).unref();
-
-const port = Number(process.env.PORT) || 3000;
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Host: http://localhost:${port}/host`);

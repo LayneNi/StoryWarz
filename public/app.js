@@ -552,11 +552,11 @@ function render() {
 
             <input id="custom" maxlength="80">
 
-            <button>Start writing</button>
+          <button id="start-game">Start writing</button>
           </form>
 
           <p class="muted">
-            Need 3–8 connected players.
+            Need 4–8 connected players to start.
             The host plays by joining on a phone.
           </p>
         `
@@ -582,7 +582,7 @@ function render() {
         content += `
           <p>
             The game has 10 stories: the first 5 score normally, and the last 5 are double points.
-            Everyone submits at least ${s.requiredStories} stories; keep the author a secret.
+            Each player submits 3–5 stories; keep the author a secret.
           </p>
 
           ${roster()}
@@ -603,8 +603,8 @@ function render() {
       } else {
         content += `
           <p>
-            Write at least ${s.requiredStories} true stories.
-            ${s.requiredStories < 5 ? `The last ${5 - s.requiredStories} are optional.` : 'All 5 stories are required.'}
+            Write 3–5 true stories.
+            The first 3 are required; the last 2 are optional.
             Maximum 500 characters each.
           </p>
 
@@ -612,13 +612,13 @@ function render() {
             ${Array.from({ length: 5 }, (_, index) => `
               <label for="story-${index}">
                 Story ${index + 1}
-                ${index >= s.requiredStories ? '(optional)' : ''}
+                ${index >= 3 ? '(optional)' : ''}
               </label>
 
               <textarea
                 id="story-${index}"
                 maxlength="500"
-                ${index < s.requiredStories ? 'required' : ''}
+                ${index < 3 ? 'required' : ''}
               ></textarea>
             `).join('')}
 
@@ -654,18 +654,19 @@ function render() {
         content += '<h2>Guess locked in.</h2>';
       } else {
         content += `
-          <p>Tap a name to select it first. Then swipe right on that selected name to lock in your vote, or tap “Lock in vote.” You cannot vote for yourself.</p>
+          <p>Tap a name to select it, then swipe right on the confirmation bar to lock in your vote. Swiping on a name will not submit it.</p>
 
           <div class="grid vote-grid">
             ${s.players.filter(player => player.id !== s.me.id).map(player => `
               <button class="vote-choice" data-vote="${player.id}" aria-pressed="false">
                 <span>${escapeHTML(player.name)}</span>
-                <span class="vote-swipe-hint" aria-hidden="true">&rarr;</span>
               </button>
             `).join('')}
           </div>
-          <p id="vote-hint" class="vote-hint" aria-live="polite">First, tap the name you want to select.</p>
-          <button id="lock-vote" class="vote-lock" type="button" disabled>Lock in vote</button>
+          <div id="vote-slider" class="vote-slider" role="slider" aria-label="Swipe right to lock in your selected vote" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-disabled="true" tabindex="-1">
+            <span id="vote-slider-label">Tap a name to begin</span>
+            <span class="vote-slider-thumb" aria-hidden="true">&rsaquo;&rsaquo;</span>
+          </div>
         `;
       }
     } else if (s.phase === 'reveal') {
@@ -822,6 +823,11 @@ function render() {
     $('begin').disabled = !s.players.every(
       player => player.ready
     );
+  }
+
+  if ($('start-game')) {
+    $('start-game').disabled =
+      s.players.length < 4 || s.players.some(player => !player.connected);
   }
 
   updateProgress();
@@ -1011,22 +1017,55 @@ function wire() {
         choice.classList.toggle('is-selected', selected);
         choice.setAttribute('aria-pressed', String(selected));
       });
-      if ($('vote-hint')) $('vote-hint').textContent = 'Now swipe right on this selected name, or tap “Lock in vote.”';
-      if ($('lock-vote')) $('lock-vote').disabled = false;
+      const slider = $('vote-slider');
+      slider.setAttribute('aria-disabled', 'false');
+      slider.setAttribute('aria-label', `Swipe right to lock in your vote for ${button.textContent.trim()}`);
+      slider.tabIndex = 0;
+      $('vote-slider-label').textContent = `Swipe right to lock in: ${button.textContent.trim()}`;
     };
 
+  });
+
+  const voteSlider = $('vote-slider');
+  if (voteSlider) {
     let startX = 0;
     let startY = 0;
-    button.onpointerdown = event => { startX = event.clientX; startY = event.clientY; };
-    button.onpointerup = event => {
-      if (selectedVote === button.dataset.vote && event.clientX - startX > 60 && Math.abs(event.clientY - startY) < 55) {
+    let progress = 0;
+    const resetSlider = () => {
+      progress = 0;
+      voteSlider.style.setProperty('--swipe-progress', '0%');
+      voteSlider.style.setProperty('--swipe-x', '0px');
+      voteSlider.setAttribute('aria-valuenow', '0');
+    };
+    voteSlider.onpointerdown = event => {
+      if (!selectedVote || !event.target.closest('.vote-slider-thumb')) return;
+      startX = event.clientX;
+      startY = event.clientY;
+      voteSlider.setPointerCapture(event.pointerId);
+    };
+    voteSlider.onpointermove = event => {
+      if (!voteSlider.hasPointerCapture(event.pointerId)) return;
+      const travel = Math.max(1, voteSlider.clientWidth - 54);
+      progress = Math.max(0, Math.min(1, (event.clientX - startX) / travel));
+      voteSlider.style.setProperty('--swipe-progress', `${progress * 100}%`);
+      voteSlider.style.setProperty('--swipe-x', `${progress * travel}px`);
+      voteSlider.setAttribute('aria-valuenow', String(Math.round(progress * 100)));
+    };
+    voteSlider.onpointerup = event => {
+      if (!voteSlider.hasPointerCapture(event.pointerId)) return;
+      voteSlider.releasePointerCapture(event.pointerId);
+      const completed = progress >= .88 && Math.abs(event.clientY - startY) < 70;
+      resetSlider();
+      if (completed) lockVote();
+    };
+    voteSlider.onpointercancel = resetSlider;
+    voteSlider.onkeydown = event => {
+      if (selectedVote && (event.key === 'End' || event.key === 'ArrowRight')) {
         event.preventDefault();
         lockVote();
       }
     };
-  });
-
-  if ($('lock-vote')) $('lock-vote').onclick = lockVote;
+  }
 
   if ($('speak')) {
     $('speak').onclick = () => {

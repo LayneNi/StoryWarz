@@ -26,6 +26,8 @@ const AVATAR_COLORS = [
 const port = Number(process.env.PORT) || 3000;
 const STORY_ROUNDS = 10;
 const DOUBLE_POINTS_START = STORY_ROUNDS / 2;
+const MIN_PLAYERS = 4;
+const MIN_STORIES = 3;
 
 const THEMES = [
   ['Summer', 'Beach trips, heatwaves, summer jobs, or outdoor adventures.'],
@@ -86,10 +88,6 @@ function current(room) {
 
 function multiplier(room) {
   return room.index >= DOUBLE_POINTS_START ? 2 : 1;
-}
-
-function requiredStories(room) {
-  return Math.max(3, Math.ceil(STORY_ROUNDS / Math.max(1, room.players.length)));
 }
 
 function active(socket) {
@@ -158,7 +156,6 @@ function view(room, person) {
     phoneOrigin: phoneOrigin(),
     themes: THEMES,
     theme: room.theme,
-    requiredStories: requiredStories(room),
 
     players: room.players.map(p => ({
       id: p.id,
@@ -167,14 +164,14 @@ function view(room, person) {
       score: p.score,
       connected: Boolean(p.socket),
       storyCount: p.stories.length,
-      ready: p.stories.length >= requiredStories(room),
+      ready: p.stories.length >= MIN_STORIES,
       voted: Object.hasOwn(room.votes, p.id)
     })),
 
     me: person
       ? {
           id: person.id,
-          ready: person.stories.length >= requiredStories(room),
+          ready: person.stories.length >= MIN_STORIES,
           voted: Object.hasOwn(room.votes, person.id),
         }
       : null,
@@ -524,10 +521,10 @@ io.on('connection', socket => {
     }
 
     if (
-      room.players.length < 3 ||
+      room.players.length < MIN_PLAYERS ||
       room.players.some(p => !p.socket)
     ) {
-      fail('Need 3–8 connected players.');
+      fail('Need 4–8 connected players.');
     }
 
     const custom =
@@ -579,7 +576,7 @@ io.on('connection', socket => {
 
     if (
       !Array.isArray(data.stories) ||
-      data.stories.length < requiredStories(room) ||
+      data.stories.length < MIN_STORIES ||
       data.stories.length > 5 ||
       data.stories.some(
         s =>

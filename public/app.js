@@ -396,11 +396,15 @@ function leaderboard(finalScore = false) {
     .join('');
 }
 
+function champion() {
+  return [...state.players].sort((a, b) => b.score - a.score)[0];
+}
+
 function scorePanel(finalScore = false) {
   const scores = leaderboard(finalScore);
   const title = finalScore ? 'Final scores' : 'Scores';
 
-  return role === 'host'
+  return role === 'host' || finalScore
     ? `
       <aside class="score-panel ${finalScore ? 'final-score-panel' : ''}">
         <div class="score-panel-heading">
@@ -650,16 +654,18 @@ function render() {
         content += '<h2>Guess locked in.</h2>';
       } else {
         content += `
-          <p>Choose who you think wrote this story. You cannot vote for yourself.</p>
+          <p>Choose a name, then swipe right on it to lock in your vote.</p>
 
-          <div class="grid">
+          <div class="grid vote-grid">
             ${s.players.filter(player => player.id !== s.me.id).map(player => `
-              <button data-vote="${player.id}">
-                ${avatar(player)}
-                ${escapeHTML(player.name)}
+              <button class="vote-choice" data-vote="${player.id}" aria-pressed="false">
+                <span>${escapeHTML(player.name)}</span>
+                <span class="vote-swipe-hint" aria-hidden="true">&rarr;</span>
               </button>
             `).join('')}
           </div>
+          <p id="vote-hint" class="vote-hint" aria-live="polite">Tap a name to select it.</p>
+          <button id="lock-vote" class="vote-lock" type="button" disabled>Lock in vote</button>
         `;
       }
     } else if (s.phase === 'reveal') {
@@ -709,13 +715,41 @@ function render() {
         ${role === 'player' ? scorePanel(true) : ''}
         <div class="results-layout finished-layout">
           <div class="results-main">
-            <h1>That’s a wrap!</h1>
+            <p class="eyebrow">THE FINAL STANDINGS</p>
+            <div class="champion-reveal">
+              <span class="champion-crown" aria-hidden="true">&#10022;</span>
+              <p class="eyebrow">STORY WARZ CHAMPION</p>
+              <h1>${escapeHTML(champion()?.name || 'Champion')}</h1>
+              <p class="champion-score">${champion()?.score || 0} points</p>
+            </div>
             ${role === 'host'
-              ? '<button id="home">Home</button>'
+              ? '<button id="story-archive">Look through every story</button>'
               : '<p>Waiting for the host to start another game.</p>'}
           </div>
           ${role === 'host' ? scorePanel(true) : ''}
         </div>
+      `;
+    }
+
+    if (s.phase === 'archive') {
+      content = `
+        <div class="archive-heading">
+          <p class="eyebrow">THE WHOLE STORY</p>
+          <h1>Story vault</h1>
+          <p>Every story submitted this game, with its author and whether it made the ten-round deck.</p>
+        </div>
+        <div class="story-archive">
+          ${(s.storyArchive || []).map(story => `
+            <article class="archive-story ${story.used ? 'was-played' : 'not-played'}">
+              <div class="archive-story-meta">
+                <span class="archive-status">${story.used ? 'Played in game' : 'Not played'}</span>
+                <span class="archive-author">${escapeHTML(name(story.authorId))}</span>
+              </div>
+              <p>${escapeHTML(story.text)}</p>
+            </article>
+          `).join('')}
+        </div>
+        ${role === 'host' ? '<button id="home">Home</button>' : '<p class="muted">The host will start another game when everyone is ready.</p>'}
       `;
     }
 
@@ -952,18 +986,47 @@ function wire() {
     $('home').onclick = () => action('end');
   }
 
+  if ($('story-archive')) {
+    $('story-archive').onclick = () => action('archive');
+  }
+
   if ($('end-game')) {
     $('end-game').onclick = () => action('end');
   }
 
-  document
-    .querySelectorAll('[data-vote]')
-    .forEach(button => {
-      button.onclick = () => action('vote', {
-        authorId: button.dataset.vote,
-        roundId: state.round.id
-      });
+  let selectedVote = null;
+  const voteChoices = [...document.querySelectorAll('[data-vote]')];
+  const lockVote = () => {
+    if (selectedVote) action('vote', {
+      authorId: selectedVote,
+      roundId: state.round.id
     });
+  };
+
+  voteChoices.forEach(button => {
+    button.onclick = () => {
+      selectedVote = button.dataset.vote;
+      voteChoices.forEach(choice => {
+        const selected = choice === button;
+        choice.classList.toggle('is-selected', selected);
+        choice.setAttribute('aria-pressed', String(selected));
+      });
+      if ($('vote-hint')) $('vote-hint').textContent = 'Swipe right on the selected name, or use the button below.';
+      if ($('lock-vote')) $('lock-vote').disabled = false;
+    };
+
+    let startX = 0;
+    let startY = 0;
+    button.onpointerdown = event => { startX = event.clientX; startY = event.clientY; };
+    button.onpointerup = event => {
+      if (selectedVote === button.dataset.vote && event.clientX - startX > 60 && Math.abs(event.clientY - startY) < 55) {
+        event.preventDefault();
+        lockVote();
+      }
+    };
+  });
+
+  if ($('lock-vote')) $('lock-vote').onclick = lockVote;
 
   if ($('speak')) {
     $('speak').onclick = () => {

@@ -189,7 +189,8 @@ function view(room, person) {
               }
             : {})
         }
-      : null
+      : null,
+    storyArchive: room.phase === 'archive' ? room.storyArchive : undefined
   };
 }
 
@@ -309,6 +310,7 @@ function resetToLobby(room) {
   room.gameId = randomUUID();
   room.theme = THEMES[0];
   room.deck = [];
+  room.storyArchive = [];
   room.index = -1;
   room.roundId = null;
   room.votes = {};
@@ -392,6 +394,7 @@ io.on('connection', socket => {
       phase: 'lobby',
       theme: THEMES[0],
       deck: [],
+      storyArchive: [],
       index: -1,
       votes: {},
       revealCountdown: null,
@@ -599,6 +602,7 @@ io.on('connection', socket => {
 
     const deck = room.players.flatMap(p =>
       p.stories.map(text => ({
+        id: randomUUID(),
         text,
         authorId: p.id
       }))
@@ -610,6 +614,12 @@ io.on('connection', socket => {
     }
 
     room.deck = deck.slice(0, 10);
+    const played = new Set(room.deck.map(story => story.id));
+    room.storyArchive = deck.map(({ id, text, authorId }) => ({
+      text,
+      authorId,
+      used: played.has(id)
+    }));
 
     nextStory(room);
 
@@ -666,6 +676,19 @@ io.on('connection', socket => {
     }
 
     nextStory(room);
+
+    return {};
+  });
+
+  on('archive', () => {
+    const room = host(socket);
+
+    if (room.phase !== 'finished') {
+      fail('Finish this game first.');
+    }
+
+    room.phase = 'archive';
+    broadcast(room);
 
     return {};
   });

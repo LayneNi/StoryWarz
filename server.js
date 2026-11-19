@@ -24,6 +24,8 @@ const AVATAR_COLORS = [
   '#a9d975'
 ];
 const port = Number(process.env.PORT) || 3000;
+const STORY_ROUNDS = 10;
+const DOUBLE_POINTS_START = STORY_ROUNDS / 2;
 
 const THEMES = [
   ['Summer', 'Beach trips, heatwaves, summer jobs, or outdoor adventures.'],
@@ -83,7 +85,11 @@ function current(room) {
 }
 
 function multiplier(room) {
-  return room.index >= 5 ? 2 : 1;
+  return room.index >= DOUBLE_POINTS_START ? 2 : 1;
+}
+
+function requiredStories(room) {
+  return Math.max(3, Math.ceil(STORY_ROUNDS / Math.max(1, room.players.length)));
 }
 
 function active(socket) {
@@ -152,6 +158,7 @@ function view(room, person) {
     phoneOrigin: phoneOrigin(),
     themes: THEMES,
     theme: room.theme,
+    requiredStories: requiredStories(room),
 
     players: room.players.map(p => ({
       id: p.id,
@@ -159,14 +166,15 @@ function view(room, person) {
       avatarColor: p.avatarColor,
       score: p.score,
       connected: Boolean(p.socket),
-      ready: p.stories.length > 0,
+      storyCount: p.stories.length,
+      ready: p.stories.length >= requiredStories(room),
       voted: Object.hasOwn(room.votes, p.id)
     })),
 
     me: person
       ? {
           id: person.id,
-          ready: person.stories.length > 0,
+          ready: person.stories.length >= requiredStories(room),
           voted: Object.hasOwn(room.votes, person.id),
         }
       : null,
@@ -571,7 +579,7 @@ io.on('connection', socket => {
 
     if (
       !Array.isArray(data.stories) ||
-      data.stories.length < 3 ||
+      data.stories.length < requiredStories(room) ||
       data.stories.length > 5 ||
       data.stories.some(
         s =>
@@ -613,7 +621,7 @@ io.on('connection', socket => {
       [deck[i], deck[j]] = [deck[j], deck[i]];
     }
 
-    room.deck = deck.slice(0, 10);
+    room.deck = deck.slice(0, STORY_ROUNDS);
     const played = new Set(room.deck.map(story => story.id));
     room.storyArchive = deck.map(({ id, text, authorId }) => ({
       text,

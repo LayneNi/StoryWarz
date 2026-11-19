@@ -581,8 +581,8 @@ function render() {
       if (role === 'host') {
         content += `
           <p>
-            Write 3–5 true stories on your phone.
-            Keep the author a secret.
+            The game has 10 stories: the first 5 score normally, and the last 5 are double points.
+            Everyone submits at least ${s.requiredStories} stories; keep the author a secret.
           </p>
 
           ${roster()}
@@ -603,8 +603,8 @@ function render() {
       } else {
         content += `
           <p>
-            Write at least 3 true stories.
-            The last 2 are optional.
+            Write at least ${s.requiredStories} true stories.
+            ${s.requiredStories < 5 ? `The last ${5 - s.requiredStories} are optional.` : 'All 5 stories are required.'}
             Maximum 500 characters each.
           </p>
 
@@ -612,13 +612,13 @@ function render() {
             ${Array.from({ length: 5 }, (_, index) => `
               <label for="story-${index}">
                 Story ${index + 1}
-                ${index > 2 ? '(optional)' : ''}
+                ${index >= s.requiredStories ? '(optional)' : ''}
               </label>
 
               <textarea
                 id="story-${index}"
                 maxlength="500"
-                ${index < 3 ? 'required' : ''}
+                ${index < s.requiredStories ? 'required' : ''}
               ></textarea>
             `).join('')}
 
@@ -654,7 +654,7 @@ function render() {
         content += '<h2>Guess locked in.</h2>';
       } else {
         content += `
-          <p>Choose a name, then swipe right on it to lock in your vote.</p>
+          <p>Tap a name to select it first. Then swipe right on that selected name to lock in your vote, or tap “Lock in vote.” You cannot vote for yourself.</p>
 
           <div class="grid vote-grid">
             ${s.players.filter(player => player.id !== s.me.id).map(player => `
@@ -664,7 +664,7 @@ function render() {
               </button>
             `).join('')}
           </div>
-          <p id="vote-hint" class="vote-hint" aria-live="polite">Tap a name to select it.</p>
+          <p id="vote-hint" class="vote-hint" aria-live="polite">First, tap the name you want to select.</p>
           <button id="lock-vote" class="vote-lock" type="button" disabled>Lock in vote</button>
         `;
       }
@@ -784,7 +784,7 @@ function render() {
           ${
             s.phase === 'writing'
               ? player.ready
-                ? '<span class="ready-label">Ready</span>'
+                ? `<span class="ready-label">${player.storyCount} stories ready</span>`
                 : '<span class="ready-label">Writing</span>'
               : ''
           }
@@ -1011,7 +1011,7 @@ function wire() {
         choice.classList.toggle('is-selected', selected);
         choice.setAttribute('aria-pressed', String(selected));
       });
-      if ($('vote-hint')) $('vote-hint').textContent = 'Swipe right on the selected name, or use the button below.';
+      if ($('vote-hint')) $('vote-hint').textContent = 'Now swipe right on this selected name, or tap “Lock in vote.”';
       if ($('lock-vote')) $('lock-vote').disabled = false;
     };
 
